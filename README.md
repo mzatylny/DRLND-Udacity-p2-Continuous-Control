@@ -3,10 +3,6 @@
 ## Description 
 For this project, we train a double-jointed arm agent to follow a target location.
 
-<p align="center">
-	<img src="images/reacher_gif.gif" width=50% height=50%>
-</p>
-
 ## Problem Statement 
 A reward of +0.1 is provided for each step that the agent's hands is in the goal location.
 Thus, the goal of the agent is to maintain its position at
@@ -24,9 +20,7 @@ the environment, the agent must get an average score of +30 over 100 consecutive
 episodes.
 
 ## Files 
-- `Continuous_Control.ipynb`: Notebook used to control and train the agent 
-- `ddpg_agent.py`: Create an Agent class that interacts with and learns from the environment 
-- `model.py`: Actor and Critic classes  
-- `config.json`: Configuration file to store variables and paths
-- `utils.py`: Helper functions 
-- `report.pdf`: Technical report
+- `Continuous_Control.ipynb`: Notebook with the code 
+- `critic.pth`: Critic trained model
+- `actor.pth`: Actor trained model 
+- `report.M`: Technical report
