@@ -41,3 +41,7 @@ the environment that matches your operating system:
 ## Running
 Run the cells in the notebook `Continuous_Control.ipynb` to train an agent that solves our required
 task of moving the double-jointed arm.
+**Important** To run the code remove the following command: 
+```
+!pip -q install ./python and change the path to the enviroment to the own path.
+``` 
