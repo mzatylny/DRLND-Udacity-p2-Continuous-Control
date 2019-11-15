@@ -1,169 +1,185 @@
-# Report
 
-This project utilised the DDPG (Deep Deterministic Policy Gradient) architecture outlined in the [DDPG-Bipedal Udacity project repo](https://github.com/udacity/deep-reinforcement-learning/tree/master/ddpg-bipedal). The goal is make robotic arm that maintain contact with the green spheres.
+# Project 3: Multi-Agent Collaboration & Competition 
+#### Udacity Deep Reinforcement Learning Nanodegree
 
-In this environment, a double-jointed arm can move to target locations. A reward of `+0.1` is provided for each step that the agent's hand is in the goal location. Thus, the goal of our agent is to maintain its position at the target location for as many time steps as possible.
+## Project Background
+Reinforcement learning (RL) is a subfield of AI that's shown promise. However, thus far, much of RL's success has been in single agent domains, where building models that predict the behavior of other actors is unnecessary. As a result, traditional RL approaches (such as Q-Learning) are not well-suited for the complexity that accompanies environments where multiple agents are continuously interacting and evolving their policies.
 
-The observation space consists of `33` variables corresponding to position, rotation, velocity, and angular velocities of the arm.  Each action is a vector with four numbers, corresponding to torque applicable to two joints.  Every entry in the action vector must be a number between `-1` and `1`.
+Unfortunately, traditional reinforcement learning approaches such as Q-Learning or policy gradient
+are poorly suited to multi-agent environments. One issue is that each agent’s policy is changing
+as training progresses, and the environment becomes non-stationary from the perspective of any
+individual agent in a way that is not explainable by changes in the agent’s own policy. This presents
+learning stability challenges and prevents the straightforward use of past experience replay, which is crucial for stabilizing deep Q-learning. Policy gradient methods, on the other hand, usually exhibit very high variance when coordination of multiple agents is required. 
 
-In order to solve the environment, our agent must achieve a score of +30 averaged across for 100 consecutive episodes.
+
+## Goal
+The goal of this project is to train two RL agents to play tennis. The goal of each agent is to keep the ball in play
 
 
-### Approach
+## The Environment
+In this environment, two agents control rackets to bounce a ball over a net. If an agent hits the ball over the net, it receives a reward of +0.1. If an agent lets a ball hit the ground or hits the ball out of bounds, it receives a reward of -0.01. Thus, the goal of each agent is to keep the ball in play.
+
+The observation space consists of 8 variables corresponding to the position and velocity of the ball and racket. Each agent receives its own, local observation. Two continuous actions are available, corresponding to movement toward (or away from) the net, and jumping.
+
+The task is episodic, and in order to solve the environment, your agents must get an average score of +0.5 (over 100 consecutive episodes, after taking the maximum over both agents). Specifically,
+
+After each episode, we add up the rewards that each agent received (without discounting), to get a score for each agent. This yields 2 (potentially different) scores. We then take the maximum of these 2 scores.
+
+This yields a single score for each episode.
+
+The environment is considered solved, when the average (over 100 episodes) of those scores is at least +0.5.
+
+## Approach
 Here are the high-level steps taken in building an agent that solves this environment.
 
-1. Evaluate the state and action space.
-2. Establish performance baseline using a random action policy.
-3. Select an appropriate algorithm and begin implementing it.
-4. Run experiments
-5. Make revisions
-6. Retrain the agent until the performance threshold is reached.
+1. Establish performance baseline using a random action policy.
+1. Select an appropriate algorithm and begin implementing it.
+1. Run experiments, make revisions, and retrain the agent until the performance threshold is reached.
 
 
 
-### 1. Evaluate State & Action Space
-The state space space has 33 dimensions corresponding to the position, rotation, velocity, and angular velocities of the robotic arm. There are two sections of the arm &mdash; analogous to those connecting the shoulder and elbow (i.e., the humerus), and the elbow to the wrist (i.e., the forearm) on a human body.
+### 1. Establish Baseline
+Before building agents that learn, I started by testing ones that select actions (uniformly) at random at each time step.
 
-Each action is a vector with four numbers, corresponding to the torque applied to the two joints (shoulder and elbow). Every element in the action vector must be a number between -1 and 1, making the action space continuous.
-
-
-
-### 2. Establish Baseline
-Before building an agent that learns, I started by testing an agent that selects actions (uniformly) at random at each time step.
-
-```python
-#env_info = env.reset(train_mode=False)[brain_name]     # reset the environment    
-#states = env_info.vector_observations                  # get the current state (for each agent)
-#scores = np.zeros(num_agents)                          # initialize the score (for each agent)
-#while True:
-    actions = np.random.randn(num_agents, action_size) # select an action (for each agent)
-    actions = np.clip(actions, -1, 1)                  # all actions between -1 and 1
-    env_info = env.step(actions)[brain_name]           # send all actions to tne environment
-    next_states = env_info.vector_observations         # get next state (for each agent)
-    rewards = env_info.rewards                         # get reward (for each agent)
-    dones = env_info.local_done                        # see if episode finished
-    scores += env_info.rewards                         # update the score (for each agent)
-    states = next_states                               # roll over states to next time step
-    if np.any(dones):                                  # exit loop if episode finished
-        break
-#print('Total score (averaged over agents) this episode: {}'.format(np.mean(scores)))
-```
-
-Running this agent a few times resulted in scores from 0.01 to 0.05. If the agent needs to achieve an average score of 30 over 100 consecutive episodes, then choosing actions at random won't work.
+Running the random agents a few times resulted in scores from 0 to 0.02. Obviously, if these agents need to achieve an average score of 0.5 over 100 consecutive episodes, then choosing actions at random won't work. However, when you watch the agents acting randomly, it becomes clear that these types of sporadic actions can be useful early in the training process. That is, they can help the agents explore the action space to find some signal of good vs. bad actions
 
 
-### 3. Implement Learning Algorithm
-To get started, there are a few high-level architecture decisions we need to make. First, we need to determine which types of algorithms are most suitable for the Reacher environment. Second, we need to determine how many "brains" we want controlling the actions of our agents.
-  in my case I will control a brain for an agent 
+### 2. Implement Learning Algorithm
+To get started, there are a few high-level architecture decisions we need to make. First, we need to determine which types of algorithms are most suitable for the Tennis environment.
 
-### Deep Deterministic Policy Gradient (DDPG)
-The algorithm I chose to model my project on is outlined in [this paper](https://arxiv.org/pdf/1509.02971.pdf), Continuous Control with Deep Reinforcement Learning, In this paper, the authors present "a model-free, off-policy actor-critic algorithm using deep function approximators that can learn policies in high-dimensional, continuous action spaces." They highlight that DDPG can be viewed as an extension of Deep Q-learning to continuous tasks.
+##### Policy-based vs Value-based Methods
+There are two key differences in the Tennis environment compared to the environment from two projects ago:
+1. **Multiple agents** The Tennis environment has 2 different agents, whereas the Navigation project had only a single agent.
+2. **Continuous action space** The action space is now _continuous_, which allows each agent to execute more complex and precise movements. Even though each tennis agent can only move forward, backward, or jump, there's an unlimited range of possible action values that control these movements. Whereas, the agent in the Navigation project was limited to four _discrete_ actions: left, right, forward, backward.
 
-I used [this vanilla, single-agent DDPG](https://github.com/udacity/deep-reinforcement-learning/tree/master/ddpg-pendulum) as a template. I further experimented with the DDPG algorithm based on other concepts covered in Udacity's classroom and lessons.
+Given the additional complexity of this environment, the **value-based method** we used for the Navigation project is not suitable, the Deep Q-Network (DQN) algorithm. Most importantly, we need an algorithm that allows the tennis agent to utilize its full range and power of movement. For this, we'll need to explore a different class of algorithms called **policy-based methods**.
 
-### Actor-Critic Method
+Here are some advantages of policy-based methods:
+- **Continuous action spaces** Policy-based methods are well-suited for continuous action spaces.
+- **Stochastic policies** Both value-based and policy-based methods can learn deterministic policies. However, policy-based methods can also learn true stochastic policies.
+- **Simplicity** Policy-based methods directly learn the optimal policy, without having to maintain a separate value function estimate. With value-based methods, the agent uses its experience with the environment to maintain an estimate of the optimal action-value function, from which an optimal policy is derived. This intermediate step requires the storage of lots of additional data since you need to account for all possible action values. Even if you discretize the action space, the number of possible actions can get quite large. And, using DQN to determine the action that maximizes the action-value function within a continuous or high-dimensional space requires a complex optimization process at every timestep.
+
+
+##### Multi-Agent Deep Deterministic Policy Gradient (MADDPG)
+The original DDPG algorithm to create the MADDPG(Multi-Agent Deep Deterministic Policy Gradient) version, is outlined in [this paper](https://arxiv.org/pdf/1509.02971.pdf), Continuous Control with Deep Reinforcement Learning, by researchers at Google Deepmind. In this paper, the authors present "a model-free, off-policy actor-critic algorithm using deep function approximators that can learn policies in high-dimensional, continuous action spaces." They highlight that DDPG can be viewed as an extension of Deep Q-learning to continuous tasks
+
+
+
+
+##### Actor-Critic Method
 Actor-critic methods leverage the strengths of both policy-based and value-based methods.
 
 Using a policy-based approach, the agent (actor) learns how to act by directly estimating the optimal policy and maximizing reward through gradient ascent. Meanwhile, employing a value-based approach, the agent (critic) learns how to estimate the value (i.e., the future cumulative reward) of different state-action pairs. Actor-critic methods combine these two approaches in order to accelerate the learning process. Actor-critic agents are also more stable than value-based agents, while requiring fewer training samples than policy-based agents.
 
-You can find the actor-critic logic implemented in the notebook.
+
 
 ```python
 # Actor Network (w/ Target Network)
-        self.actor_local = Actor(state_size, action_size, random_seed).to(device)
-        self.actor_target = Actor(state_size, action_size, random_seed).to(device)
-        self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR_ACTOR)
+self.actor_local = Actor(state_size, action_size, random_seed).to(device)
+self.actor_target = Actor(state_size, action_size, random_seed).to(device)
+self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR_ACTOR)
 
 # Critic Network (w/ Target Network)
-        self.critic_local = Critic(state_size, action_size, random_seed).to(device)
-        self.critic_target = Critic(state_size, action_size, random_seed).to(device)
-        self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
+self.critic_local = Critic(state_size, action_size, random_seed).to(device)
+self.critic_target = Critic(state_size, action_size, random_seed).to(device)
+self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
+
 # Noise process
-        self.noise = OUNoise(action_size, random_seed)
+self.noise = OUNoise((num_agents, action_size), random_seed)
 
 # Replay memory
-        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)    
+self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
+
 ```
 
+```
+# hyperparameters
 
-
-### hyperparameters related to this noise process.
-
-The Ornstein-Uhlenbeck process itself has three hyperparameters that determine the noise characteristics and magnitude:
-- mu = 0                 the long-running mean
-- theta = 0.15           the speed of mean reversion
-- sigma = 0.05           the volatility parameter
-- epsilon = 1.0          explore->exploit noise process added to act step
-- epsilon_decay = 1e-6   ecay rate for noise process
-
+BUFFER_SIZE = int(1e6)  # replay buffer size
+BATCH_SIZE = 128        # minibatch size
+LR_ACTOR = 1e-3         # learning rate of the actor
+LR_CRITIC = 1e-3        # learning rate of the critic
+WEIGHT_DECAY = 0        # L2 weight decay
+LEARN_EVERY = 1         # learning timestep interval
+LEARN_NUM = 5           # number of learning passes
+GAMMA = 0.99            # discount factor
+TAU = 8e-3              # for soft update of target parameters
+OU_SIGMA = 0.2          # Ornstein-Uhlenbeck noise parameter, volatility
+OU_THETA = 0.15          # Ornstein-Uhlenbeck noise parameter, speed of mean reversion
+EPS_START = 5.0         # initial value for epsilon in noise decay process in Agent.act()
+EPS_EP_END = 300        # episode to end the noise decay process
+EPS_FINAL = 0           # final value for epsilon after decay
+```
 
 ```python
-# ---------------------------- update critic ---------------------------- #
-        # Get predicted next-state actions and Q values from target models
-        actions_next = self.actor_target(next_states)
-        Q_targets_next = self.critic_target(next_states, actions_next)
-        # Compute Q targets for current states (y_i)
-        Q_targets = rewards + (gamma * Q_targets_next * (1 - dones))
-        # Compute critic loss
-        Q_expected = self.critic_local(states, actions)
-        critic_loss = F.mse_loss(Q_expected, Q_targets)
-        # Minimize the loss
-        self.critic_optimizer.zero_grad()
-        critic_loss.backward()
-        self.critic_optimizer.step()
-
-        # ---------------------------- update actor ---------------------------- #
-        # Compute actor loss
-        actions_pred = self.actor_local(states)
-        actor_loss = -self.critic_local(states, actions_pred).mean()
-        # Minimize the loss
-        self.actor_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor_optimizer.step()
-
-        # ----------------------- update target networks ----------------------- #
-        self.soft_update(self.critic_local, self.critic_target, TAU)
-        self.soft_update(self.actor_local, self.actor_target, TAU)                     
-
+# Compute critic loss
+Q_expected = self.critic_local(states, actions)
+critic_loss = F.mse_loss(Q_expected, Q_targets)
+# Minimize the loss
+self.critic_optimizer.zero_grad()
+critic_loss.backward()
+torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
+self.critic_optimizer.step()
 ```
 
 
-
-```python
-# actor forward pass
-def forward(self, state):
-    """Build an actor (policy) network that maps states -> actions."""
-    x = F.relu(self.bn1(self.fc1(state)))
-    x = F.relu(self.fc2(x))
-    return F.tanh(self.fc3(x))
-```
-```python
-# critic forward pass
-def forward(self, state, action):
-    """Build a critic (value) network that maps (state, action) pairs -> Q-values."""
-    xs = F.relu(self.bn1(self.fcs1(state)))
-    x = torch.cat((xs, action), dim=1)
-    x = F.relu(self.fc2(x))
-    return self.fc3(x)
-```
-
-
-### Experience Replay
+#### Experience Replay
 Experience replay allows the RL agent to learn from past experience.
 
-As with DQN in the previous project, DDPG also utilizes a replay buffer to gather experiences from each agent. Each experience is stored in a replay buffer as the agent interacts with the environment. 
+the algorithm employs a replay buffer to gather experiences. Experiences are stored in a single replay buffer as each agent interacts with the environment. These experiences are then utilized by the central critic, therefore allowing the agents to learn from each others' experiences.
 
-The replay buffer contains a collection of experience tuples with the state, action, reward, and next state `(s, a, r, s')`. Each agent samples from this buffer as part of the learning step. Experiences are sampled randomly, so that the data is uncorrelated. This prevents action values from oscillating or diverging catastrophically, since a naive algorithm could otherwise become biased by correlations between sequential experience tuples.
+The replay buffer contains a collection of experience tuples with the state, action, reward, and next state `(s, a, r, s')`. The critic samples from this buffer as part of the learning step. Experiences are sampled randomly, so that the data is uncorrelated. This prevents action values from oscillating or diverging catastrophically, since a naive algorithm could otherwise become biased by correlations between sequential experience tuples.
 
-Also, experience replay improves learning through repetition. By doing multiple passes over the data, our agent have multiple opportunities to learn from a single experience tuple. This is particularly useful for state-action pairs that occur infrequently within the environment.
+Also, experience replay improves learning through repetition. By doing multiple passes over the data, our agents have multiple opportunities to learn from a single experience tuple. This is particularly useful for state-action pairs that occur infrequently within the environment.
+
+```
+class ReplayBuffer:
+    """Fixed-size buffer to store experience tuples."""
+
+    def __init__(self, action_size, buffer_size, batch_size, seed):
+        """Initialize a ReplayBuffer object.
+        Params
+        ======
+            buffer_size (int): maximum size of buffer
+            batch_size (int): size of each training batch
+        """
+        self.action_size = action_size
+        self.memory = deque(maxlen=buffer_size)  # internal memory (deque)
+        self.batch_size = batch_size
+        self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
+        self.seed = random.seed(seed)
+
+    def add(self, state, action, reward, next_state, done):
+        """Add a new experience to memory."""
+        e = self.experience(state, action, reward, next_state, done)
+        self.memory.append(e)
+
+    def sample(self):
+        """Randomly sample a batch of experiences from memory."""
+        experiences = random.sample(self.memory, k=self.batch_size)
+
+        states = torch.from_numpy(np.vstack([e.state for e in experiences if e is not None])).float().to(device)
+        actions = torch.from_numpy(np.vstack([e.action for e in experiences if e is not None])).float().to(device)
+        rewards = torch.from_numpy(np.vstack([e.reward for e in experiences if e is not None])).float().to(device)
+        next_states = torch.from_numpy(np.vstack([e.next_state for e in experiences if e is not None])).float().to(device)
+        dones = torch.from_numpy(np.vstack([e.done for e in experiences if e is not None]).astype(np.uint8)).float().to(device)
+
+        return (states, actions, rewards, next_states, dones)
+
+    def __len__(self):
+        """Return the current size of internal memory."""
+        return len(self.memory)
+```
+
+## Results
+
+the performance goal is an average reward of at least +0.5 over 100 episodes, taking the best score from either agent for a given episode.
+
+The graph below shows the final training results. The best-performing agents were able to solve the environment in 1111 episodes with a moving average of 0.549. The complete set of results and steps can be found in this notebook.
+
+![enter image description here](https://lh3.googleusercontent.com/x378k8gvRoiSbeiqw1_feWdEBhaChw_VoPFrvgmY20fXzFxg0JI3qGRvGCPZcXoVfaTskAh_Bc4e)
 
 
-### 4. Results
-Once all of the various components of the algorithm were in place, my agent was able to solve the Reacher environment. Again, the performance goal is an average reward of at least +30 over 100 episodes, and over one agent.
-
-The graph below shows the final results:
-![results](https://lh3.googleusercontent.com/7Wr98i9ktOSKJvsz3UcJVe_3y0bqX8J9OzVb3x6EZiA43ZLtM1UJ5K1_nh51ATZL-gEuUbJzrnZD "plot")
-### 5.Future Improvements
-- **Experiment with other algorithms**; Tuning the DDPG algorithm required a lot of trial and error. Perhaps another algorithm such as [Trust Region Policy Optimization (TRPO)](https://arxiv.org/abs/1502.05477), [Proximal Policy Optimization (PPO)](https://arxiv.org/abs/1707.06347), or [Distributed Distributional Deterministic Policy Gradients (D4PG)](https://arxiv.org/abs/1804.08617) would be more robust.
-
+## Future Improvements
+Address stability issues to produce more consistent results — My best result are only reproducible if you run the model numerous times. If you just run it once  the model might not converge. I ran the model at least 10 while searching for a good set of hyperparameters, Otherwise, more research is needed to find a more stable algorithm, or to make changes to the current DDPG algorithm.
 
